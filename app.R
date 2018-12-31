@@ -1,14 +1,15 @@
 
 
-#code below is from Ewen Gallic#
+#Some code below is from Ewen Gallic#
 # Author : Ewen Gallic http://editerna.free.fr/wp/
 # Date : 2014-08-03
 
 # Any comments are welcome.
-
+#setwd("~/analytics/NCAA.SHOT.CHART.APP")
 library(grid)
 library(ggplot2)
 library(gridExtra)
+library(DT)
 library(gtable)
 
 
@@ -196,11 +197,12 @@ ui <- fluidPage(
       
       # Input: Selector for choosing dataset ----
       textInput(inputId = "player_full_name",
-                label = "Search for any NCAA player since 2013 season:", 
-                value = "Joel Berry II"), 
+                label = "Search for any NCAA player since 2013 season (only UNC ACC schedule 
+                available for 2018):", 
+                value = "Zion Williamson"), 
       selectizeInput(inputId = "year",
                      label = "Select Seasons:",
-                     choices = c(2013:2018), multiple = TRUE, selected = 2017)
+                     choices = c(2013:2018), multiple = TRUE, selected = 2018)
       
     ),
     
@@ -208,7 +210,7 @@ ui <- fluidPage(
     # Main panel for displaying outputs ----
     mainPanel(
       plotOutput("shotchart"), 
-      textOutput("percentage"),
+      # plotOutput("hot_cold"),
       dataTableOutput("shottable") 
       
       
@@ -269,14 +271,96 @@ server <- function(input, output) {
                  player_full_name in", playerlist, "AND", "season in", yearlist,  sep = " ")
     ncaa = query_exec(sql, project = project)
     
+    ncaa_2018 <- read_csv(file = "sportradar_2018 (2018 unc schedule only).csv")
+
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="player.full_name")] <- "player_full_name"
+
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="location.coord_x")] <- "event_coord_x"
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="location.coord_y")] <- "event_coord_y"
+
+    
+    colnames(ncaa_2018) <- gsub(".", "_", colnames(ncaa_2018), fixed = TRUE)
+    
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="id")] <- "event_id"
+    
+
+    # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_name")] <- "team_name"
+    # 
+    # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_market")] <- "team_market"
+    # 
+    # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_id")] <- "team_id"
+    # 
+    # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_team_basket")] <- "team_basket"
+    # 
+    
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="made")] <- "shot_made"
+    
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="points")] <- "points_scored"
+    
+    colnames(ncaa_2018)[which(colnames(ncaa_2018)=="description")] <- "event_description"
     
     
-    threes <- ncaa %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss" 
+    
+    goodcols <- colnames(ncaa_2018) %in% colnames(ncaa)
+    
+    
+
+
+          
+    #need to join two datsets together#
+    
+    ncaa <- ncaa %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss" 
                                | event_type == "twopointmade" | event_type == "twopointmiss")
    
+    ncaa_2018 <- ncaa_2018 %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss" 
+                               | event_type == "twopointmade" | event_type == "twopointmiss")
+    
+    ncaa_2018 <- ncaa_2018 %>% filter(type == 'fieldgoal')
     
     
-    unc <- threes
+    ncaa_2018$season <- 'ted'
+    ncaa_2018$season <- 2018
+    
+    
+    player = gsub("(", "", playerlist, fixed = TRUE)
+    player = gsub(")", "", player, fixed = TRUE)
+    player = gsub("'", "", player, fixed = TRUE)
+    
+    
+    year = gsub("(", "", yearlist, fixed = TRUE)
+    year = gsub(")", "", year, fixed = TRUE)
+    year = gsub("'", "", year, fixed = TRUE)
+    
+    newlist <- strsplit(year, ', ')
+    
+    newlist <- newlist[[1]]
+    
+    
+    ncaa_2018 <- ncaa_2018 %>% filter(player_full_name == player)
+    View(ncaa_2018)
+    
+
+    #print(ncaa_2018 == 'Cameron Johnson')
+    
+
+    
+
+    # fixed = gsub("(", "", fixedt, fixed = TRUE)
+    # fixed = gsub(")", "", playerlist, fixed = TRUE)
+    # fixed = gsub("'", "", playerlist, fixed = TRUE)
+    # 
+    # 
+    # 
+    # 
+    # ncaa_2018 <- ncaa_2018 %>% filter(season %in% yearlist)
+    
+
+    if(2018 %in% newlist){
+      
+      unc <- full_join(ncaa, ncaa_2018)
+      
+      
+    }
     
     unc$event_coord_x <- unc$event_coord_x / 12
     unc$event_coord_y <- unc$event_coord_y / 12
@@ -327,45 +411,191 @@ server <- function(input, output) {
     unc[, 'scaled_x_coord'] <- sapply(unc[, 'coord_x'],  FUN = flip3)
     
     
-    unc$distance <- sqrt(unc$scaled_x_coord^2 + unc$coord_y)
+    unc$distance <- sqrt(unc$scaled_x_coord^2 + unc$coord_y^2)
     
     unc$angle <- atan(unc$coord_y/unc$scaled_x_coord)
     
-    jumpshots <- unc %>% filter(threes$shot_type == 'jump shot')
-    layups <- unc %>% filter(threes$shot_type == 'jump shot')
+    
+    
+    
     
 
     threes <- unc
-    # threes$event_type <- gsub("threepointmade", '3', threes$event_type)
-    # threes$event_type <- gsub("threepointmiss", '0', threes$event_type)
-    # 
-    # threes$event_type <- gsub("twopointmade", '2', threes$event_type)
-    # 
-    # threes$event_type <- gsub("twopointmiss", '0', threes$event_type)
-    # 
-    # threes$outcome <- gsub('2', '1', threes$event_type)
-    # threes$outcome <- gsub('3', '1', threes$outcome)
-    # 
-    # 
-    # 
-    # threes$event_type <- as.numeric(threes$event_type)
-    # threes$outcome = 0
-    # for(i in 1:nrow(threes)){
-    #   
-    # if(threes$event_type[i] > 0){
-    #   
-    #  threes$outcome[i] = 1
-    # }
-    # }
-    # 
-    # 
-    # threes <- as.data.frame(threes)
+    
+    #threes$rim_coord_y <- threes$coord_y + 4
+    
+    
+
+    threes$section <- 0
+    
+  #threes$range <- 0
+    for(i in 1:nrow(threes)){
+      
+      # if(threes[i, 'distance'] > 20.75){
+      #   
+      #   threes[i, 'range'] <- '3 Pointers'
+      #   
+      # }
+      # 
+      # 
+      # if(threes[i, 'rim_coord_y'] > 3.5 & threes[i, 'distance'] <= 4){
+      #   
+      #   threes[i, 'range'] <- '3 Pointers'
+      #   
+      # }
+    if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] <= 20.75){
+      
+      threes[i, 'section'] <- 'Right Mid Range'
+      
+      
+
+    }
+    
+      if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] <= 20.75){
+        
+        
+        
+        threes[i, 'section'] <- 'Left Mid Range'
+        
+      
+      }
+      
+      if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] > 20.75){
+        
+        threes[i, 'section'] <- 'Left Three Point'
+        
+        
+      }
+      
+      if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] > 20.75){
+        
+        threes[i, 'section'] <- 'Right Three Point'
+        
+        
+      }
+      if(threes[i, 'coord_x'] >= 19  &
+         threes[i, 'distance'] <= 20.75  & threes[i, 'coord_y'] > 6 & 
+         threes[i, 'coord_x'] <= 31){
+        
+        threes[i, 'section'] <- 'Above The Block and In The Paint'
+        
+        
+      }
+      
+      
+      if(threes[i, 'coord_x'] >= 19 & threes[i, 'coord_y'] <=  9  &  threes[i, 'coord_x'] <= 31){
+        
+        threes[i, 'section'] <- 'Below The Block and In The Paint'
+        
+        
+      }
+      
+      
+      
+      if(threes[i, 'coord_x'] >= 19  & threes[i, 'coord_x'] <= 31 & 
+         threes[i, 'distance'] > 20.75){
+        
+        threes[i, 'section'] <- 'Top Of The Key'
+        
+        
+      }
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    threes$event_type <- gsub("threepointmade", '3', threes$event_type)
+    threes$event_type <- gsub("threepointmiss", '0', threes$event_type)
+
+    threes$event_type <- gsub("twopointmade", '2', threes$event_type)
+
+    threes$event_type <- gsub("twopointmiss", '0', threes$event_type)
+
+
+    threes$outcome <- gsub('2', '1', threes$event_type)
+    threes$outcome <- gsub('3', '1', threes$outcome)
+
+
+
+    threes$event_type <- as.numeric(threes$event_type)
+    threes$outcome = 0
+    for(i in 1:nrow(threes)){
+
+    if(threes$event_type[i] > 0){
+
+     threes$outcome[i] = 1
+    }
+    }
+
+
+    threes <- as.data.frame(threes)
     
     
 
 
-    # threes$outcome <- as.numeric(gsub("miss", 0, threes$outcome))
-    # threes$outcome <- as.numeric(threes$outcome)
+    threes$outcome <- as.numeric(gsub("miss", 0, threes$outcome))
+    threes$outcome <- as.numeric(threes$outcome)
+    
+    mid_rangejumpshots <- threes %>% 
+      filter(shot_type == 'jump shot' & three_point_shot == 'FALSE')  %>%
+      summarise(section = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+    
+    layups <- threes %>% filter(shot_type == 'layup')  %>%
+      summarise(section = 'Layups', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+    
+    
+    threepointshots <- threes %>% filter(three_point_shot == 'TRUE') %>%
+      summarise(section = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+    
+    
+    section_summary <- threes %>% group_by(section) %>% 
+      summarise(`Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+    
+    section_summary <- rbind(section_summary, layups, threepointshots, mid_rangejumpshots)
+    
+    acc_averages <- read_csv(file = "acc_player_pps_2017.csv")
+    
+    
+    mysd <- sd(acc_averages$pps)
+    
+    mymean <- mean(acc_averages$pps)
+    
+    section_summary$acc.percentile = round(pnorm(section_summary$`Points Per Shot`, mean = mymean, sd = mysd), 2)
+    
+    section_summary$`Points Per Shot` <- round(section_summary$`Points Per Shot`, 2)
+    output$shottable <- renderDataTable({
+      
+
+    section_summary
+    })
+    
+    # output$hot_cold <- renderPlot({
+    #   
+    #  ggplot(court) + 
+    #     geom_polygon(data = court[court$side==1,], 
+    #     aes(x = x, y = y, group = group), col = "black") +
+    #     coord_equal() + 
+    #     xlim(-3,54) +
+    #     ylim(-3,50) +
+    #     scale_y_continuous(breaks = c(0, 23.5, 47)) +
+    #     scale_x_continuous(breaks = c(0, 12.5, 25, 37.5, 50)) +
+    #     
+    #     xlab("") + ylab("") +
+    #     theme(axis.text.x = element_blank(),
+    #           axis.text.y = element_blank(), axis.ticks.x = element_blank(),
+    #           axis.ticks.y = element_blank(), axis.title = element_blank(), 
+    #           legend.position = "none"
+    #     ) 
+    #   
+    #   
+    #   
+    # })
+    
+    return(threes)
     # 
     # threes$value <-  gsub("miss", "", threes$event_type)
     # threes$value <-  gsub("made", "", threes$value )
@@ -420,6 +650,8 @@ server <- function(input, output) {
     
   })
   
+  
+
   
   
   
