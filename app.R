@@ -197,7 +197,7 @@ ui <- fluidPage(
       
       # Input: Selector for choosing dataset ----
       textInput(inputId = "player_full_name",
-                label = "Search for any NCAA player since 2013 season (only UNC ACC schedule 
+                label = "Search for any NCAA player since the 2013 season (only UNC ACC scheduled opponents 
                 available for 2018):", 
                 value = "Zion Williamson"), 
       selectizeInput(inputId = "year",
@@ -337,8 +337,7 @@ server <- function(input, output) {
     
     
     ncaa_2018 <- ncaa_2018 %>% filter(player_full_name == player)
-    View(ncaa_2018)
-    
+
 
     #print(ncaa_2018 == 'Cameron Johnson')
     
@@ -477,7 +476,7 @@ server <- function(input, output) {
          threes[i, 'distance'] <= 20.75  & threes[i, 'coord_y'] > 6 & 
          threes[i, 'coord_x'] <= 31){
         
-        threes[i, 'section'] <- 'Above The Block and In The Paint'
+        threes[i, 'section'] <- 'Above The Block and Below The Arc'
         
         
       }
@@ -542,18 +541,18 @@ server <- function(input, output) {
     
     mid_rangejumpshots <- threes %>% 
       filter(shot_type == 'jump shot' & three_point_shot == 'FALSE')  %>%
-      summarise(section = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+      summarise(section = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     layups <- threes %>% filter(shot_type == 'layup')  %>%
-      summarise(section = 'Layups', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+      summarise(section = 'Layups', `Points Per Shot` = mean(event_type),  `Number Of Shots` = n(),  `Field Goal Percentage` = mean(outcome))
     
     
     threepointshots <- threes %>% filter(three_point_shot == 'TRUE') %>%
-      summarise(section = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+      summarise(section = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     
     section_summary <- threes %>% group_by(section) %>% 
-      summarise(`Points Per Shot` = mean(event_type), `Number Of Shots` = n())
+      summarise(`Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     section_summary <- rbind(section_summary, layups, threepointshots, mid_rangejumpshots)
     
@@ -567,6 +566,9 @@ server <- function(input, output) {
     section_summary$acc.percentile = round(pnorm(section_summary$`Points Per Shot`, mean = mymean, sd = mysd), 2)
     
     section_summary$`Points Per Shot` <- round(section_summary$`Points Per Shot`, 2)
+    
+    section_summary$`Field Goal Percentage` <- round(section_summary$`Field Goal Percentage`, 2)
+    
     output$shottable <- renderDataTable({
       
 
