@@ -353,13 +353,12 @@ server <- function(input, output) {
     # 
     # ncaa_2018 <- ncaa_2018 %>% filter(season %in% yearlist)
     
+    print(newlist)
 
-    if(2018 %in% newlist){
-      
       unc <- full_join(ncaa, ncaa_2018)
       
-      
-    }
+      unc <- unc %>% filter(season %in% newlist)
+    
     
     unc$event_coord_x <- unc$event_coord_x / 12
     unc$event_coord_y <- unc$event_coord_y / 12
@@ -421,14 +420,24 @@ server <- function(input, output) {
 
     threes <- unc
     
-    #threes$rim_coord_y <- threes$coord_y + 4
+    threes$rim_coord_y <- threes$coord_y - 4
     
+    threes$distance_from_rim <- sqrt(c(threes$scaled_x_coord^2) +  threes$rim_coord_y^2)
+    
+  print(unique(threes$shot_type))
     
 
-    threes$section <- 0
+    threes$Group <- 0
     
   #threes$range <- 0
-    for(i in 1:nrow(threes)){
+    # for(i in 1:nrow(threes)){
+    #   
+    #   
+    #   if(threes[i, 'distance_from_rim'] <= 3){
+    # 
+    #     threes[i, 'Group'] <- 'Restricted Area'
+    # 
+    #   }
       
       # if(threes[i, 'distance'] > 20.75){
       #   
@@ -442,63 +451,62 @@ server <- function(input, output) {
       #   threes[i, 'range'] <- '3 Pointers'
       #   
       # }
-    if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] <= 20.75){
-      
-      threes[i, 'section'] <- 'Right Mid Range'
-      
-      
-
-    }
-    
-      if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] <= 20.75){
-        
-        
-        
-        threes[i, 'section'] <- 'Left Mid Range'
-        
-      
-      }
-      
-      if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] > 20.75){
-        
-        threes[i, 'section'] <- 'Left Three Point'
-        
-        
-      }
-      
-      if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] > 20.75){
-        
-        threes[i, 'section'] <- 'Right Three Point'
-        
-        
-      }
-      if(threes[i, 'coord_x'] >= 19  &
-         threes[i, 'distance'] <= 20.75  & threes[i, 'coord_y'] > 6 & 
-         threes[i, 'coord_x'] <= 31){
-        
-        threes[i, 'section'] <- 'Above The Block and Below The Arc'
-        
-        
-      }
-      
-      
-      if(threes[i, 'coord_x'] >= 19 & threes[i, 'coord_y'] <=  9  &  threes[i, 'coord_x'] <= 31){
-        
-        threes[i, 'section'] <- 'Below The Block and In The Paint'
-        
-        
-      }
-      
-      
-      
-      if(threes[i, 'coord_x'] >= 19  & threes[i, 'coord_x'] <= 31 & 
-         threes[i, 'distance'] > 20.75){
-        
-        threes[i, 'section'] <- 'Top Of The Key'
-        
-        
-      }
-    }
+    # if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] <= 20.75){
+    #   
+    #   threes[i, 'Group'] <- 'Right Mid Range'
+    #   
+    #   
+    # 
+    # }
+    # 
+    #   if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] <= 20.75){
+    #     
+    #     
+    #     
+    #     threes[i, 'Group'] <- 'Left Mid Range'
+    #     
+    #   
+    #   }
+    #   
+    #   if(threes[i, 'coord_x'] > 31 & threes[i, 'distance'] > 20.75){
+    #     
+    #     threes[i, 'Group'] <- 'Left Three Point'
+    #     
+    #     
+    #   }
+    #   
+    #   if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] > 20.75){
+    #     
+    #     threes[i, 'Group'] <- 'Right Three Point'
+    #     
+    #     
+    #   }
+    #   if(threes[i, 'coord_x'] >= 19  &
+    #      threes[i, 'distance'] <= 20.75  & threes[i, 'coord_y'] > 6 & 
+    #      threes[i, 'coord_x'] <= 31){
+    #     
+    #     threes[i, 'Group'] <- 'Above The Block and Below The Arc'
+    #     
+    #     
+    #   }
+    #   
+    #   
+    #   if(threes[i, 'coord_x'] >= 19 & threes[i, 'coord_y'] <=  9  &  threes[i, 'coord_x'] <= 31){
+    #     
+    #     threes[i, 'Group'] <- 'Below The Block and In The Paint'
+    #     
+    #     
+    #   }
+    #   
+    #   
+    #   
+    #   if(threes[i, 'coord_x'] >= 19  & threes[i, 'coord_x'] <= 31 & 
+    #      threes[i, 'distance'] > 20.75){
+    #     
+    #     threes[i, 'Group'] <- 'Top Of The Key'
+    #     
+    #     
+    #   }
     
     
     
@@ -539,22 +547,24 @@ server <- function(input, output) {
     threes$outcome <- as.numeric(gsub("miss", 0, threes$outcome))
     threes$outcome <- as.numeric(threes$outcome)
     
+    print(unique(threes$three_point_shot))
     mid_rangejumpshots <- threes %>% 
-      filter(shot_type == 'jump shot' & three_point_shot == 'FALSE')  %>%
-      summarise(section = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+      filter(shot_type == 'jump shot' & three_point_shot == 'FALSE' | shot_type == 'jump shot' & is.na(three_point_shot) == 'TRUE')  %>%
+      summarise(Group = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
-    layups <- threes %>% filter(shot_type == 'layup')  %>%
-      summarise(section = 'Layups', `Points Per Shot` = mean(event_type),  `Number Of Shots` = n(),  `Field Goal Percentage` = mean(outcome))
+    layups <- threes %>% filter(shot_type == 'layup' | shot_type == 'dunk')  %>%
+      summarise(Group = 'Layups and Dunks', `Points Per Shot` = mean(event_type),  `Number Of Shots` = n(),  `Field Goal Percentage` = mean(outcome))
     
     
     threepointshots <- threes %>% filter(three_point_shot == 'TRUE') %>%
-      summarise(section = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+      summarise(Group = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+    
+    restricted <- threes %>% filter(distance_from_rim <= 3) %>%
+      summarise(Group = 'Restricted Area', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     
-    section_summary <- threes %>% group_by(section) %>% 
-      summarise(`Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
-    
-    section_summary <- rbind(section_summary, layups, threepointshots, mid_rangejumpshots)
+
+    Group_summary <- rbind(restricted, layups, threepointshots, mid_rangejumpshots)
     
     acc_averages <- read_csv(file = "acc_player_pps_2017.csv")
     
@@ -563,16 +573,16 @@ server <- function(input, output) {
     
     mymean <- mean(acc_averages$pps)
     
-    section_summary$acc.percentile = round(pnorm(section_summary$`Points Per Shot`, mean = mymean, sd = mysd), 2)
+    Group_summary$`ACC Points Per Shot Percentile` = round(pnorm(Group_summary$`Points Per Shot`, mean = mymean, sd = mysd), 2)
     
-    section_summary$`Points Per Shot` <- round(section_summary$`Points Per Shot`, 2)
+    Group_summary$`Points Per Shot` <- round(Group_summary$`Points Per Shot`, 2)
     
-    section_summary$`Field Goal Percentage` <- round(section_summary$`Field Goal Percentage`, 2)
+    Group_summary$`Field Goal Percentage` <- round(Group_summary$`Field Goal Percentage`, 2)
     
     output$shottable <- renderDataTable({
       
 
-    section_summary
+    Group_summary
     })
     
     # output$hot_cold <- renderPlot({
