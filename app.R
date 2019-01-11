@@ -11,8 +11,6 @@ library(ggplot2)
 library(gridExtra)
 library(DT)
 library(gtable)
-
-
 ###############
 ## FUNCTIONS ##
 ###############
@@ -184,6 +182,51 @@ library(shiny)
 library(plotly)
 
 
+players_before_2018 <- read_csv(file = 'players_before_2018.csv')
+
+
+players_before_2018 <- unique(players_before_2018$player_full_name)
+
+players_before_2018 <- players_before_2018[!is.na(players_before_2018)]
+
+ncaa_2018 <- read_csv(file = "sportradar_2018 (2018 unc schedule only).csv")
+
+
+
+#colnames(ncaa_2018)[which(colnames(ncaa_2018)=="player.full_name")] <- "player_full_name"
+
+unique_players_2018 <- unique(ncaa_2018$player.full_name)
+
+unique_players_2018 <- unique_players_2018[!is.na(unique_players_2018)]
+
+#unique_teams_2018 <- unique(ncaa_2018$attribution.market)
+
+# colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_name")] <- "team_name"
+
+
+
+
+myplayers = sort(unique(c(unique_players_2018, players_before_2018)))
+
+
+
+
+
+
+teams_before_2018 <- read_csv(file = 'teams_before_2018.csv')
+
+
+
+teams_before_2018 <- unique(teams_before_2018$team_market)
+
+
+
+myteams = sort(teams_before_2018)
+
+#myteams <- c("Duke", "North Carolina", "Wake Forest")
+
+
+
 ui <- fluidPage(
   
   # App title ----
@@ -196,26 +239,30 @@ ui <- fluidPage(
     sidebarPanel(
       
       # Input: Selector for choosing dataset ----
-      textInput(inputId = "player_full_name",
-                label = "Search for any NCAA player since the 2013 season (only UNC ACC scheduled opponents 
-                available for 2018):", 
-                value = "Zion Williamson"), 
+      selectizeInput(inputId = "player_full_name",
+                     label = "Search for any NCAA player since the 2013 season (only UNC ACC scheduled opponents 
+                     available for 2018):", choices = myplayers, multiple = TRUE, 
+                     selected = "Zion Williamson"), 
+      selectizeInput(inputId = "team_name",
+                     label = "Search for any NCAA team since the 2013 season (only UNC ACC scheduled opponents 
+                     available for 2018):", choices = myteams, 
+                     selected = "Duke"),
       selectizeInput(inputId = "year",
                      label = "Select Seasons:",
                      choices = c(2013:2018), multiple = TRUE, selected = 2018)
       
-    ),
-    
+),
 
-    # Main panel for displaying outputs ----
-    mainPanel(
-      plotOutput("shotchart"), 
-      # plotOutput("hot_cold"),
-      dataTableOutput("shottable") 
-      
-      
-    )
-  )
+
+# Main panel for displaying outputs ----
+mainPanel(
+  plotOutput("shotchart"), 
+  # plotOutput("hot_cold"),
+  DT::dataTableOutput("shottable") 
+  
+  
+)
+      )
 )
 
 
@@ -241,6 +288,20 @@ server <- function(input, output) {
     return(roster)
   })
   
+  newteams <- reactive({
+    
+    
+    roster <- sapply(input$team_name, FUN = quoter)
+    
+    roster <- (paste(roster, collapse =  ", "))
+    roster <- gsub('"', '', roster)
+    roster <- noquote(roster)
+    
+    team <- noquote(paste("(", noquote(roster), ")", sep = ""))
+    
+    return(team)
+  })
+  
   newyears <- reactive({
     
     
@@ -261,29 +322,51 @@ server <- function(input, output) {
     playerlist <- newroster()
     yearlist <- newyears()
     
+    teamlist <- newteams()
+    
     project <- "ncaa-shot-data-222316" # put your project ID here
-    sql <- paste("SELECT
-                 *
-                 FROM
-                 [bigquery-public-data.ncaa_basketball.mbb_pbp_sr]
-                 
-                 WHERE
-                 player_full_name in", playerlist, "AND", "season in", yearlist,  sep = " ")
-    ncaa = query_exec(sql, project = project)
+    
+    if(playerlist != "()"){
+      
+      
+      
+      sql <- paste("SELECT
+                   *
+                   FROM
+                   [bigquery-public-data.ncaa_basketball.mbb_pbp_sr]
+                   
+                   WHERE
+                   player_full_name in", playerlist, "AND team_market in", teamlist,  "AND season in", yearlist,  sep = " ")
+      ncaa = query_exec(sql, project = project)
+    }
+    
+    
+    else{
+      sql <- paste("SELECT
+                   *
+                   FROM
+                   [bigquery-public-data.ncaa_basketball.mbb_pbp_sr]
+                   
+                   WHERE
+                   team_market in", teamlist,  "AND season in", yearlist,  sep = " ")
+      ncaa = query_exec(sql, project = project)
+      
+      
+    }
     
     ncaa_2018 <- read_csv(file = "sportradar_2018 (2018 unc schedule only).csv")
-
+    
     colnames(ncaa_2018)[which(colnames(ncaa_2018)=="player.full_name")] <- "player_full_name"
-
+    
     colnames(ncaa_2018)[which(colnames(ncaa_2018)=="location.coord_x")] <- "event_coord_x"
     colnames(ncaa_2018)[which(colnames(ncaa_2018)=="location.coord_y")] <- "event_coord_y"
-
+    
     
     colnames(ncaa_2018) <- gsub(".", "_", colnames(ncaa_2018), fixed = TRUE)
     
     colnames(ncaa_2018)[which(colnames(ncaa_2018)=="id")] <- "event_id"
     
-
+    
     # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_name")] <- "team_name"
     # 
     # colnames(ncaa_2018)[which(colnames(ncaa_2018)=="attribution_market")] <- "team_market"
@@ -301,19 +384,20 @@ server <- function(input, output) {
     
     
     
-    goodcols <- colnames(ncaa_2018) %in% colnames(ncaa)
+    #goodcols <- colnames(ncaa_2018) %in% colnames(ncaa)
     
     
-
-
-          
+    
+    
+    
+    
     #need to join two datsets together#
     
-    ncaa <- ncaa %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss" 
-                               | event_type == "twopointmade" | event_type == "twopointmiss")
-   
+    ncaa <- ncaa %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss"
+                             | event_type == "twopointmade" | event_type == "twopointmiss")
+    
     ncaa_2018 <- ncaa_2018 %>%  filter(event_type == "threepointmade" | event_type == "threepointmiss" 
-                               | event_type == "twopointmade" | event_type == "twopointmiss")
+                                       | event_type == "twopointmade" | event_type == "twopointmiss")
     
     ncaa_2018 <- ncaa_2018 %>% filter(type == 'fieldgoal')
     
@@ -326,24 +410,36 @@ server <- function(input, output) {
     player = gsub(")", "", player, fixed = TRUE)
     player = gsub("'", "", player, fixed = TRUE)
     
+    new_player_list <- strsplit(player, ', ')
+    
+    new_player_list <- new_player_list[[1]]
+    
+    elteam = gsub("(", "", teamlist, fixed = TRUE)
+    elteam = gsub(")", "", elteam, fixed = TRUE)
+    elteam = gsub("'", "", elteam, fixed = TRUE)
+    
+    new_team_list <- strsplit(elteam, ', ')
+    
+    new_team_list <- new_team_list[[1]]
+    
     
     year = gsub("(", "", yearlist, fixed = TRUE)
     year = gsub(")", "", year, fixed = TRUE)
     year = gsub("'", "", year, fixed = TRUE)
     
-    newlist <- strsplit(year, ', ')
+    new_year_list <- strsplit(year, ', ')
     
-    newlist <- newlist[[1]]
+    new_year_list <- new_year_list[[1]]
     
     
-    ncaa_2018 <- ncaa_2018 %>% filter(player_full_name == player)
-
-
+    #ncaa_2018 <- ncaa_2018 %>% filter(player_full_name == player)
+    
+    
     #print(ncaa_2018 == 'Cameron Johnson')
     
-
     
-
+    
+    
     # fixed = gsub("(", "", fixedt, fixed = TRUE)
     # fixed = gsub(")", "", playerlist, fixed = TRUE)
     # fixed = gsub("'", "", playerlist, fixed = TRUE)
@@ -353,11 +449,31 @@ server <- function(input, output) {
     # 
     # ncaa_2018 <- ncaa_2018 %>% filter(season %in% yearlist)
     
-    print(newlist)
-
-      unc <- full_join(ncaa, ncaa_2018)
+    
+    unc <- full_join(ncaa, ncaa_2018)
+    
+    #unc <- ncaa_2018
+    
+    print(new_year_list)
+    print(new_team_list)
+    print(new_player_list)
+    
+    if(length(new_player_list) == 0){
+      unc <- unc %>% filter(season %in% new_year_list & 
+                              team_market %in% new_team_list)
       
-      unc <- unc %>% filter(season %in% newlist)
+      
+      
+    }
+    
+    else{
+      
+      
+      
+      unc <- unc %>% filter(season %in% new_year_list & 
+                              team_market %in% new_team_list & 
+                              player_full_name %in% new_player_list)
+    }
     
     
     unc$event_coord_x <- unc$event_coord_x / 12
@@ -406,8 +522,10 @@ server <- function(input, output) {
       
       return(y)
     }
-    unc[, 'scaled_x_coord'] <- sapply(unc[, 'coord_x'],  FUN = flip3)
+    unc[, 'scaled_x_coord'] <- as.vector(sapply(unc[, 'coord_x'],  FUN = flip3))
     
+    # print(class(unc$scaled_x_coord))
+    # print(class(unc))
     
     unc$distance <- sqrt(unc$scaled_x_coord^2 + unc$coord_y^2)
     
@@ -417,19 +535,18 @@ server <- function(input, output) {
     
     
     
-
+    
     threes <- unc
     
     threes$rim_coord_y <- threes$coord_y - 4
     
     threes$distance_from_rim <- sqrt(c(threes$scaled_x_coord^2) +  threes$rim_coord_y^2)
     
-  print(unique(threes$shot_type))
     
-
+    
     threes$Group <- 0
     
-  #threes$range <- 0
+    #threes$range <- 0
     # for(i in 1:nrow(threes)){
     #   
     #   
@@ -438,19 +555,19 @@ server <- function(input, output) {
     #     threes[i, 'Group'] <- 'Restricted Area'
     # 
     #   }
-      
-      # if(threes[i, 'distance'] > 20.75){
-      #   
-      #   threes[i, 'range'] <- '3 Pointers'
-      #   
-      # }
-      # 
-      # 
-      # if(threes[i, 'rim_coord_y'] > 3.5 & threes[i, 'distance'] <= 4){
-      #   
-      #   threes[i, 'range'] <- '3 Pointers'
-      #   
-      # }
+    
+    # if(threes[i, 'distance'] > 20.75){
+    #   
+    #   threes[i, 'range'] <- '3 Pointers'
+    #   
+    # }
+    # 
+    # 
+    # if(threes[i, 'rim_coord_y'] > 3.5 & threes[i, 'distance'] <= 4){
+    #   
+    #   threes[i, 'range'] <- '3 Pointers'
+    #   
+    # }
     # if(threes[i, 'coord_x'] < 19 & threes[i, 'distance'] <= 20.75){
     #   
     #   threes[i, 'Group'] <- 'Right Mid Range'
@@ -517,54 +634,61 @@ server <- function(input, output) {
     
     threes$event_type <- gsub("threepointmade", '3', threes$event_type)
     threes$event_type <- gsub("threepointmiss", '0', threes$event_type)
-
+    
     threes$event_type <- gsub("twopointmade", '2', threes$event_type)
-
+    
     threes$event_type <- gsub("twopointmiss", '0', threes$event_type)
-
-
+    
+    
     threes$outcome <- gsub('2', '1', threes$event_type)
     threes$outcome <- gsub('3', '1', threes$outcome)
-
-
-
+    
+    
+    
     threes$event_type <- as.numeric(threes$event_type)
     threes$outcome = 0
     for(i in 1:nrow(threes)){
-
-    if(threes$event_type[i] > 0){
-
-     threes$outcome[i] = 1
+      
+      if(threes$event_type[i] > 0){
+        
+        threes$outcome[i] = 1
+      }
     }
-    }
-
-
+    
+    
     threes <- as.data.frame(threes)
     
     
-
-
+    
+    
     threes$outcome <- as.numeric(gsub("miss", 0, threes$outcome))
     threes$outcome <- as.numeric(threes$outcome)
     
-    print(unique(threes$three_point_shot))
+    
+    allshots <- threes %>% 
+      summarise(Group = 'All Shots',   `Points Per Shot` = mean(event_type), `Percent Of Total Shots` = 1,  `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+    
+    
     mid_rangejumpshots <- threes %>% 
       filter(shot_type == 'jump shot' & three_point_shot == 'FALSE' | shot_type == 'jump shot' & is.na(three_point_shot) == 'TRUE')  %>%
-      summarise(Group = 'Two Point Jump shots', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+      summarise(Group = 'Two Point Jump Shots', `Percent Of Total Shots` = n()/allshots$`Number Of Shots`,  `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     layups <- threes %>% filter(shot_type == 'layup' | shot_type == 'dunk')  %>%
-      summarise(Group = 'Layups and Dunks', `Points Per Shot` = mean(event_type),  `Number Of Shots` = n(),  `Field Goal Percentage` = mean(outcome))
+      summarise(Group = 'Layups and Dunks',  `Points Per Shot` = mean(event_type), `Percent Of Total Shots` = n()/allshots$`Number Of Shots`, `Number Of Shots` = n(),  `Field Goal Percentage` = mean(outcome))
     
     
     threepointshots <- threes %>% filter(three_point_shot == 'TRUE') %>%
-      summarise(Group = 'Three Pointers', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+      summarise(Group = 'Three Pointers',  `Points Per Shot` = mean(event_type), `Percent Of Total Shots` = n()/allshots$`Number Of Shots`, `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     restricted <- threes %>% filter(distance_from_rim <= 3) %>%
-      summarise(Group = 'Restricted Area', `Points Per Shot` = mean(event_type), `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
+      summarise(Group = 'Restricted Area',  `Points Per Shot` = mean(event_type), `Percent Of Total Shots` = n()/allshots$`Number Of Shots`, `Number Of Shots` = n(), `Field Goal Percentage` = mean(outcome))
     
     
-
+    
     Group_summary <- rbind(restricted, layups, threepointshots, mid_rangejumpshots)
+    
+    Group_summary <- rbind(allshots, restricted, layups, threepointshots, mid_rangejumpshots)
+    
     
     acc_averages <- read_csv(file = "acc_player_pps_2017.csv")
     
@@ -579,10 +703,16 @@ server <- function(input, output) {
     
     Group_summary$`Field Goal Percentage` <- round(Group_summary$`Field Goal Percentage`, 2)
     
-    output$shottable <- renderDataTable({
+    Group_summary$`Percent Of Total Shots` <- round(Group_summary$`Percent Of Total Shots`, 2)
+    
+    library(DT)
+    output$shottable <- DT::renderDataTable({
       
-
-    Group_summary
+      
+      DT::datatable(Group_summary,  options = list(
+        pageLength = 10, autoWidth = TRUE, dom = 't'
+      ), rownames = FALSE)
+      
     })
     
     # output$hot_cold <- renderPlot({
@@ -622,26 +752,26 @@ server <- function(input, output) {
     #     threes$pts[i] <-  threes$value[i]
     #   } 
     # }
-   
+    
     #pct <- length(which(threes$event_type == "threepointmade")) / (length(which(threes$event_type == "threepointmade")) + length(which(threes$event_type == "threepointmiss")))
     
     
     #three_pps <- threepct * 3
     
-
+    
   })
   
   output$shotchart <- renderPlot({
-   
+    
     
     threes <- table()
- #bin = hex_bin(x = threes$coord_x, y = threes$coord_y, var4=threes$event_type)
+    #bin = hex_bin(x = threes$coord_x, y = threes$coord_y, var4=threes$event_type)
     # hexes = hex_coord_df(x=bin$x, y=bin$y, width=attr(bin,"width"), height=attr(bin,"height"), size=bin$size)
     # hexes$points = rep(bin$col, each=6)
     # #ggplot(hexes, aes(x=x, y=y)) + geom_polygon(aes(fill=points, group=id)) +
-
     
     
+    threes <- threes %>% filter(event_type != 'freethrowmade' & event_type != 'freethrowmiss')
     ggplot(threes, aes(x = coord_x, y = coord_y)) + geom_polygon(data = court[court$side==1,], aes(x = x, y = y, group = group), col = "black") +
       coord_equal() + 
       geom_point() + 
@@ -663,11 +793,11 @@ server <- function(input, output) {
   })
   
   
-
   
   
   
-}
+  
+  }
 
 # Create Shiny app ----
 shinyApp(ui = ui, server = server)
