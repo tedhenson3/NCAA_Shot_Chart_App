@@ -144,7 +144,8 @@ library(readr)
 mygames <- read_csv("gameids_2018.csv")
 
 
-all2018 <- mygames %>% filter(games.coverage == "full" & games.status == "closed")
+all2018 <- mygames %>% filter(games.coverage == "full")
+#& games.status == "closed")
 unc_games <- mygames %>% filter(games.home.alias == "UNC" | games.away.alias == "UNC")
 all_future_teams <- c(unc_games$games.home.alias, unc_games$games.away.alias)
 
@@ -165,10 +166,13 @@ all_future_acc <- all_future_teams[which(all_non_conf == FALSE)]
 
 thisyear <- all2018 %>% filter(games.home.alias %in% all_future_acc | games.away.alias %in% all_future_acc)
 
+thisyear <- thisyear %>% filter(games.status == "closed" &  games.track_on_court == 'TRUE')
 
 
 
 lastgame <- nrow(thisyear)
+
+lastgame
 
 
 #NEED TO RUN LINES BELOW FOR ALL GAMES PLAYED FOR FUTURE UNC OPPONENTS##
@@ -177,7 +181,7 @@ lastgame <- nrow(thisyear)
 for(i in 1:lastgame){
   print(i)
   
-  thegame <- paste('https://api.sportradar.us/ncaamb/trial/v4/en/games/', thisyear[i, 'games.id'], "/pbp.json?api_key=2c5yp34zwqb7eandb3ta7jzg", sep = "")
+  thegame <- paste('https://api.sportradar.us/ncaamb/trial/v4/en/games/', thisyear[i, 'games.id'], "/pbp.json?api_key=7tzd7gaqgrctphx9f3kb4uaf", sep = "")
   if(i == 1){
  data2018  <- sportradar(thegame)
   }
@@ -191,7 +195,7 @@ for(i in 1:lastgame){
 
 print(lastgame)
 write.csv(data2018, file = "sportradar_2018 (2018 unc schedule only).csv", row.names = F)
-#gonzaga_url <- 'https://api.sportradar.us/ncaamb/trial/v4/en/games/f456beba-e734-4b09-a813-c215c385670e/pbp.json?api_key=f3xcubgdbsc5f934xztn6vfk'
+#gonzaga_url <- 'https://api.sportradar.us/ncaamb/trial/v4/en/games/f456beba-e734-4b09-a813-c215c385670e/pbp.json?api_key=2c5yp34zwqb7eandb3ta7jzg'
 
 
 
