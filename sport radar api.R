@@ -7,6 +7,8 @@ library(tidyverse)
 
 
 
+#unlist_func written by Jalen McClain
+
 
 #FUNCTION TO UNNEST THE STATS VARIABLE IN EACH PERIOD
 unlist_func <- function(period){
